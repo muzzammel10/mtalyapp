@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>স্মার্ট টালি ও ইনভেন্টরি</title>
+    <meta name="theme-color" content="#009688">
+    
+    <!-- Google API Scripts -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    
+    <style>
+        :root {
+            --primary: #009688;
+            --secondary: #00796b;
+            --bg: #f0f2f5;
+            --white: #ffffff;
+            --text: #333;
+            --danger: #e74c3c;
+            --success: #2ecc71;
+            --border: #ddd;
+        }
+
+        [data-theme="dark"] {
+            --bg: #121212;
+            --white: #1e1e1e;
+            --text: #e0e0e0;
+            --border: #333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background: var(--bg); color: var(--text); padding-bottom: 70px; }
+
+        /* HEADER */
+        .header {
+            background: var(--primary); color: white; padding: 15px;
+            position: sticky; top: 0; z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .back-btn { font-size: 20px; cursor: pointer; margin-right: 10px; display: none; }
+        
+        /* NAVIGATION */
+        .navbar {
+            position: fixed; bottom: 0; width: 100%; background: var(--white);
+            display: flex; justify-content: space-around; padding: 8px 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 99; border-top: 1px solid var(--border);
+        }
+        .nav-item { text-align: center; font-size: 11px; cursor: pointer; color: #777; flex: 1; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+        .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+
+        /* CARDS & LAYOUT */
+        .container { padding: 15px; display: none; animation: fadeIn 0.3s; }
+        .container.active { display: block; }
+        
+        .card {
+            background: var(--white); padding: 15px; border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 12px; border: 1px solid var(--border);
+        }
+        .dashboard-card { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; text-align: center; }
+        .inventory-card { background: linear-gradient(135deg, #2c3e50, #4ca1af); color: white; text-align: center; }
+        .customer-dash-card { background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-align: center; }
+        .product-dash-card { background: linear-gradient(135deg, #11998e, #38ef7d); color: white; text-align: center; }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .stat-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 10px; }
+        .stat-box { background: rgba(255,255,255,0.1); padding: 8px; border-radius: 6px; text-align: center; }
+        .stat-box.light { background: #f8f9fa; border: 1px solid #eee; color: var(--text); }
+        .stat-val { font-size: 16px; font-weight: bold; display: block; }
+        
+        /* LISTS */
+        .list-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer;
+        }
+        .customer-avatar {
+            width: 40px; height: 40px; background: #eee; color: #555;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; margin-right: 12px;
+        }
+        .balance-pos { color: var(--danger); font-weight: bold; }
+        .balance-neg { color: var(--success); font-weight: bold; }
+
+        /* UI ELEMENTS */
+        button {
+            background: var(--primary); color: white; border: none;
+            padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 14px;
+            width: 100%; transition: 0.2s;
+        }
+        button:active { transform: scale(0.98); }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-google { background: #4285F4; color: white; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+        
+        input, select {
+            width: 100%; padding: 12px; margin-bottom: 10px;
+            border: 1px solid var(--border); border-radius: 6px;
+            background: var(--white); color: var(--text);
+        }
+
+        .fab {
+            position: fixed; bottom: 70px; right: 20px;
+            background: var(--primary); color: white;
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            cursor: pointer; z-index: 90;
+        }
+
+        /* MODAL */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none;
+            justify-content: center; align-items: flex-end; z-index: 300;
+        }
+        .modal-content {
+            background: var(--white); width: 100%; max-width: 500px;
+            padding: 20px; border-radius: 15px 15px 0 0;
+            animation: slideUp 0.3s; max-height: 90vh; overflow-y: auto;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* DRIVE STATUS */
+        .drive-box { border: 1px solid #4285F4; background: rgba(66, 133, 244, 0.05); padding: 15px; border-radius: 8px; text-align: center; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; margin-right: 5px; }
+        .dot.online { background: var(--success); }
+        .dot.syncing { background: #f1c40f; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .text-small { font-size: 11px; }
+        .text-muted { color: #888; }
+        .d-flex { display: flex; align-items: center; }
+        .stock-badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .tx-type-sale { color: var(--danger); } 
+        .tx-type-payment { color: var(--success); }
+
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="d-flex">
+            <span class="back-btn" id="back-btn" onclick="app.goBack()">⬅</span>
+            <div style="display:flex; flex-direction:column; line-height:1.2;">
+                <h1 id="page-title">টালি খাতা</h1>
+                <span id="active-acc-name" class="header-account-name">দোকান ১</span>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+             <!-- Drive Indicator -->
+             <div id="drive-indicator" class="dot" style="display:none;" title="Drive Synced"></div>
+             <div id="header-action" style="font-size:20px; cursor:pointer;"></div>
+        </div>
+    </div>
+
+    <!-- 1. TALLY LIST VIEW -->
+    <div id="view-tally-list" class="container active">
+        <div class="card dashboard-card">
+            <div class="stat-grid" style="margin-top:0;">
+                <div><small>মোট পাবো</small><div style="font-size:18px; font-weight:bold;">৳ <span id="dash-total-pabo">0</span></div></div>
+                <div><small>মোট দেবো</small><div style="font-size:18px; font-weight:bold;">৳ <span id="dash-total-debo">0</span></div></div>
+            </div>
+            <hr style="margin: 10px 0; opacity:0.3;">
+            <h2 id="dash-net-status" style="font-size: 16px;">হিসাব</h2>
+            <h1 style="font-size: 28px; margin-top: 5px;">৳ <span id="dash-net-amount">0</span></h1>
+        </div>
+
+        <div class="card">
+            <input type="text" id="search-customer" placeholder="কাস্টমার খুঁজুন..." onkeyup="tally.renderList()">
+            <div id="customer-list"></div>
+        </div>
+        <div class="fab" onclick="customer.openModal()">+</div>
+    </div>
+
+    <!-- 2. INVENTORY VIEW -->
+    <div id="view-inventory" class="container">
+        <div class="card inventory-card">
+            <h3>ইনভেন্টরি সারাংশ</h3>
+            <div class="stat-grid">
+                <div class="stat-box"><small>স্টক ভ্যালু</small><div class="stat-val">৳ <span id="inv-stock-value">0</span></div></div>
+                <div class="stat-box"><small>সম্ভাব্য লাভ</small><div class="stat-val">৳ <span id="inv-profit-est">0</span></div></div>
+            </div>
+        </div>
+        <div class="card d-flex">
+            <input type="text" id="search-product" placeholder="পণ্য খুঁজুন..." onkeyup="inventory.renderList()">
+        </div>
+        <button class="btn-outline" style="margin-bottom: 10px; background:white;" onclick="tally.openSellModal(null)">
+            🛒 ক্যাশ সেল
+        </button>
+        <div id="product-list" style="padding-bottom: 60px;"></div>
+        <div class="fab" onclick="inventory.openModal()">+</div>
+    </div>
+
+    <!-- 3. SETTINGS VIEW -->
+    <div id="view-settings" class="container">
+        <!-- GOOGLE DRIVE SECTION -->
+        <div class="card">
+            <h3 style="color:#4285F4; margin-bottom:10px;">Google Drive Backup</h3>
+            <div class="drive-box">
+                <div id="drive-status-ui">
+                    <div class="dot" id="drive-dot"></div> <span id="drive-text">Not Connected</span>
+                </div>
+                
+                <button id="btn-g-connect" class="btn-google" style="margin-top:15px;" onclick="gDrive.handleAuthClick()">
+                    Connect Google Drive
+                </button>
+                
+                <div id="drive-actions" style="display:none; margin-top:10px;">
+                    <p class="text-small text-muted">আপনার সব ডাটা অটোমেটিক Google Drive এ সেভ হবে।</p>
+                    <button class="btn-outline" onclick="gDrive.restoreFromDrive()" style="margin-top:10px;">
+                        ☁️ Google Drive থেকে রিস্টোর করুন
+                    </button>
+                    <button class="btn-danger" onclick="gDrive.signOut()" style="margin-top:10px; width:auto;">Sign Out</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>অ্যাকাউন্টস</h3>
+            <div id="account-list" style="margin-top:10px;"></div>
+            <button class="btn-outline" style="margin-top:10px;" onclick="app.openModal('modal-account')">+ নতুন অ্যাকাউন্ট</button>
+        </div>
+
+        <div class="card">
+            <h3>অন্যান্য</h3>
+            <label class="d-flex" style="justify-content:space-between; margin-bottom:10px;">
+                ডার্ক মোড <input type="checkbox" id="theme-toggle" style="width:auto;" onchange="app.toggleTheme()">
+            </label>
+            <button class="btn-outline" onclick="dataManager.exportJSON()">অফলাইন ব্যাকআপ ডাউনলোড</button>
+            <label class="text-small" style="display:block; margin-top:10px;">ফাইল রিস্টোর</label>
+            <input type="file" onchange="dataManager.importJSON(this)">
+            <button class="btn-danger" style="margin-top: 20px;" onclick="app.resetAll()">সব ডাটা মুছুন</button>
+        </div>
+    </div>
+
+    <!-- 4. CUSTOMER DETAIL VIEW -->
+    <div id="view-customer-detail" class="container" style="padding-bottom: 80px;">
+        <div class="card customer-dash-card">
+            <h2 id="cd-name">Name</h2>
+            <p class="text-small" id="cd-phone">Phone</p>
+            <div class="stat-grid" style="margin-top:15px;">
+                <div><small>মোট বাকি</small><div style="font-size:16px; font-weight:bold;">৳ <span id="cd-total-due">0</span></div></div>
+                <div><small>মোট জমা</small><div style="font-size:16px; font-weight:bold;">৳ <span id="cd-total-paid">0</span></div></div>
+            </div>
+            <hr style="margin: 10px 0; opacity:0.3;">
+            <small>বর্তমান অবস্থা</small>
+            <h1 style="font-size: 24px;">৳ <span id="cd-net-balance">0</span></h1>
+            <span id="cd-balance-status" style="font-size:12px; background:rgba(0,0,0,0.2); padding:2px 8px; border-radius:4px;">-</span>
+        </div>
+        <div id="customer-tx-list"></div>
+        <div class="action-footer">
+            <button class="btn-success" onclick="tally.openTransModal('payment')">📥 জমা</button>
+            <button class="btn-danger" onclick="tally.openTransModal('due')">📤 খরচ/বাকি</button>
+        </div>
+    </div>
+
+    <!-- 5. PRODUCT DETAIL VIEW -->
+    <div id="view-product-detail" class="container">
+        <div class="card product-dash-card">
+            <h2 id="pd-name">Name</h2>
+            <div class="stat-grid-3">
+                <div class="stat-box"><small>স্টক</small><div class="stat-val"><span id="pd-stock">0</span></div></div>
+                <div class="stat-box"><small>বিক্রি</small><div class="stat-val"><span id="pd-sold-qty">0</span></div></div>
+                <div class="stat-box"><small>ভ্যালু</small><div class="stat-val">৳<span id="pd-stock-val">0</span></div></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="btn-group">
+                <button class="btn-success" onclick="inventory.stockAction('buy')">➕ স্টক ইন</button>
+                <button class="btn-danger" onclick="inventory.stockAction('sell')">➖ স্টক আউট</button>
+            </div>
+            <div class="btn-group">
+                 <button class="btn-outline" onclick="inventory.editCurrent()">📝 এডিট</button>
+                 <button class="btn-danger" onclick="inventory.deleteCurrent()">🗑️ ডিলিট</button>
+            </div>
+        </div>
+        <h4 style="margin:15px 5px;">হিস্ট্রি</h4>
+        <div id="product-history-list" class="card" style="padding:0; border:none; background:transparent;"></div>
+    </div>
+
+    <!-- NAVBAR -->
+    <div class="navbar" id="main-navbar">
+        <div class="nav-item active" onclick="app.nav('tally')"><span class="nav-icon">📒</span>টালি</div>
+        <div class="nav-item" onclick="app.nav('inventory')"><span class="nav-icon">📦</span>স্টক</div>
+        <div class="nav-item" onclick="app.nav('settings')"><span class="nav-icon">🛠</span>সেটিংস</div>
+    </div>
+
+    <!-- MODALS (Simplified for brevity, logic remains) -->
+    <div id="modal-customer" class="modal"><div class="modal-content"><h3>কাস্টমার</h3><input type="hidden" id="c-id"><input type="text" id="c-name" placeholder="নাম"><input type="text" id="c-phone" placeholder="ফোন"><input type="text" id="c-address" placeholder="ঠিকানা"><div class="btn-group"><button class="btn-outline" onclick="app.closeModal('modal-customer')">বাতিল</button><button onclick="customer.save()">সেভ</button></div></div></div>
+    
+    <div id="modal-trans" class="modal"><div class="modal-content"><h3 id="tx-title">লেনদেন</h3><input type="hidden" id="tx-id"><input type="hidden" id="tx-type"><input type="number" id="tx-amount" placeholder="পরিমাণ"><input type="text" id="tx-note" placeholder="নোট"><input type="date" id="tx-date"><div class="btn-group"><button class="btn-outline" onclick="app.closeModal('modal-trans')">বাতিল</button><button onclick="tally.saveTransaction()">সেভ</button></div></div></div>
+
+    <div id="modal-product" class="modal"><div class="modal-content"><h3 id="modal-p-title">পণ্য</h3><input type="hidden" id="p-id"><input type="text" id="p-name" placeholder="নাম"><div class="stat-grid"><input type="number" id="p-buy" placeholder="ক্রয়"><input type="number" id="p-sell" placeholder="বিক্রয়"></div><div class="stat-grid"><input type="number" id="p-stock" placeholder="স্টক"><input type="text" id="p-unit" placeholder="একক"></div><div class="btn-group"><button class="btn-outline" onclick="app.closeModal('modal-product')">বাতিল</button><button onclick="inventory.save()">সেভ</button></div></div></div>
+
+    <div id="modal-sell" class="modal"><div class="modal-content"><h3>বিক্রয়</h3><select id="sell-c-select"></select><select id="sell-p-select" onchange="tally.updateSellPrice()"></select><div class="stat-grid"><input type="number" id="sell-qty" value="1" oninput="tally.updateSellTotal()"><input type="number" id="sell-rate" oninput="tally.updateSellTotal()"></div><div style="text-align:right;">মোট: <span id="sell-total">0</span></div><input type="text" id="sell-note"><div class="btn-group"><button class="btn-outline" onclick="app.closeModal('modal-sell')">বাতিল</button><button onclick="tally.confirmSell()">নিশ্চিত</button></div></div></div>
+
+    <div id="modal-stock-in" class="modal"><div class="modal-content"><h3>স্টক ইন</h3><p id="sin-p-name"></p><input type="number" id="sin-qty" placeholder="পরিমাণ"><div class="btn-group"><button class="btn-outline" onclick="app.closeModal('modal-stock-in')">বাতিল</button><button onclick="inventory.confirmStockIn()">যুক্ত করুন</button></div></div></div>
+
+    <div id="modal-account" class="modal"><div class="modal-content"><h3>নতুন অ্যাকাউন্ট</h3><input type="text" id="new-acc-name" placeholder="নাম"><div class="btn-group"><button class="btn-outline" onclick="app.closeModal('modal-account')">বাতিল</button><button onclick="app.createAccount()">তৈরি</button></div></div></div>
+
+    <div id="modal-c-actions" class="modal"><div class="modal-content" style="text-align:center;"><button class="btn-outline" onclick="customer.editCurrent()">✏️ এডিট</button><button class="btn-danger" style="margin-top:10px;" onclick="customer.deleteCurrent()">🗑️ ডিলিট</button><button class="btn-outline" style="margin-top:10px; border:none;" onclick="app.closeModal('modal-c-actions')">বন্ধ</button></div></div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION (DEVELOPER MUST FILL THIS)
+        // ==========================================
+        const YOUR_GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID_HERE"; // Console থেকে পাওয়া Client ID এখানে বসান
+        const YOUR_GOOGLE_API_KEY = "YOUR_API_KEY_HERE";     // Console থেকে পাওয়া API Key এখানে বসান
+        // ==========================================
+
+        const DB_KEY = 'tally_inv_v5';
+
+        // --- GOOGLE DRIVE MODULE (Auto) ---
+        const gDrive = {
+            tokenClient: null,
+            isLoggedIn: false,
+            backupFileName: 'SmartTally_UserData.json',
+            timer: null,
+
+            init: function() {
+                if(!YOUR_GOOGLE_CLIENT_ID || YOUR_GOOGLE_CLIENT_ID.includes("YOUR_")) return;
+
+                gapi.load('client', async () => {
+                    await gapi.client.init({
+                        apiKey: YOUR_GOOGLE_API_KEY,
+                        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+                    });
+                    this.checkLoginState();
+                });
+
+                this.tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: YOUR_GOOGLE_CLIENT_ID,
+                    scope: "https://www.googleapis.com/auth/drive.appdata", // Hidden Folder Scope
+                    callback: (resp) => {
+                        if (resp.error) return console.error(resp);
+                        this.isLoggedIn = true;
+                        localStorage.setItem('g_logged_in', 'true');
+                        this.updateUI(true);
+                        this.checkForFile();
+                    },
+                });
+            },
+
+            checkLoginState: function() {
+                // Simplified: We assume session lost on reload, user must reconnect click
+                // But we check localStorage to prompt UI
+                if(localStorage.getItem('g_logged_in') === 'true') {
+                    // Token expired likely, just show UI as 'Ready to Sync' but wait for user interaction or auto-refresh
+                    // For safety in this simple app, we ask to connect again to refresh token
+                    this.updateUI(false); 
+                }
+            },
+
+            handleAuthClick: function() {
+                if(!YOUR_GOOGLE_CLIENT_ID.includes("YOUR_")) {
+                    this.tokenClient.requestAccessToken({prompt: ''});
+                } else {
+                    alert("Developer Config Missing: Please set Client ID in code.");
+                }
+            },
+
+            signOut: function() {
+                const token = gapi.client.getToken();
+                if (token !== null) {
+                    google.accounts.oauth2.revoke(token.access_token);
+                    gapi.client.setToken('');
+                    localStorage.removeItem('g_logged_in');
+                    this.isLoggedIn = false;
+                    this.updateUI(false);
+                    alert("Signed Out");
+                }
+            },
+
+            updateUI: function(connected) {
+                const dot = document.getElementById('drive-dot');
+                const text = document.getElementById('drive-text');
+                const btn = document.getElementById('btn-g-connect');
+                const actions = document.getElementById('drive-actions');
+                const headInd = document.getElementById('drive-indicator');
+
+                if(connected) {
+                    dot.className = "dot online";
+                    text.innerText = "Connected to Drive";
+                    btn.style.display = "none";
+                    actions.style.display = "block";
+                    headInd.style.display = "block";
+                    headInd.className = "dot online";
+                } else {
+                    dot.className = "dot";
+                    text.innerText = "Not Connected";
+                    btn.style.display = "flex";
+                    actions.style.display = "none";
+                    headInd.style.display = "none";
+                }
+            },
+
+            // --- SYNC LOGIC ---
+            autoBackup: function(data) {
+                if(!this.isLoggedIn) return;
+                
+                clearTimeout(this.timer);
+                document.getElementById('drive-text').innerText = "Syncing...";
+                document.getElementById('drive-dot').className = "dot syncing";
+                document.getElementById('drive-indicator').className = "dot syncing";
+
+                this.timer = setTimeout(() => {
+                    this.upload(data);
+                }, 2000);
+            },
+
+            upload: async function(data) {
+                try {
+                    const fileContent = JSON.stringify(data);
+                    const fileId = localStorage.getItem('g_file_id');
+                    
+                    const metadata = {
+                        name: this.backupFileName,
+                        mimeType: 'application/json',
+                        parents: ['appDataFolder'] // Saves in hidden app folder
+                    };
+
+                    if(fileId) {
+                        await gapi.client.request({
+                            path: '/upload/drive/v3/files/' + fileId,
+                            method: 'PATCH',
+                            params: { uploadType: 'media' },
+                            body: fileContent
+                        });
+                    } else {
+                        const form = new FormData();
+                        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                        form.append('file', new Blob([fileContent], { type: 'application/json' }));
+
+                        const res = await gapi.client.request({
+                            path: '/upload/drive/v3/files',
+                            method: 'POST',
+                            params: { uploadType: 'multipart' },
+                            body: form
+                        });
+                        localStorage.setItem('g_file_id', res.result.id);
+                    }
+                    
+                    document.getElementById('drive-text').innerText = "Synced Just Now";
+                    document.getElementById('drive-dot').className = "dot online";
+                    document.getElementById('drive-indicator').className = "dot online";
+
+                } catch(e) {
+                    console.error(e);
+                    document.getElementById('drive-text').innerText = "Sync Failed (Retry)";
+                    if(e.status === 404) localStorage.removeItem('g_file_id'); // File deleted externally
+                }
+            },
+
+            checkForFile: async function() {
+                try {
+                    const res = await gapi.client.drive.files.list({
+                        q: "name = '" + this.backupFileName + "' and 'appDataFolder' in parents",
+                        spaces: 'appDataFolder'
+                    });
+                    if(res.result.files.length > 0) {
+                        localStorage.setItem('g_file_id', res.result.files[0].id);
+                    }
+                } catch(e) { console.log(e); }
+            },
+
+            restoreFromDrive: async function() {
+                if(!confirm("Google Drive থেকে রিস্টোর করলে বর্তমান ডাটা মুছে যাবে। আপনি কি নিশ্চিত?")) return;
+                
+                try {
+                    const fileId = localStorage.getItem('g_file_id');
+                    if(!fileId) {
+                         await this.checkForFile(); // Try finding it once
+                         if(!localStorage.getItem('g_file_id')) return alert("কোনো ব্যাকআপ ফাইল পাওয়া যায়নি।");
+                    }
+
+                    const res = await gapi.client.drive.files.get({
+                        fileId: localStorage.getItem('g_file_id'),
+                        alt: 'media'
+                    });
+
+                    if(res.result && res.result.accounts) {
+                        db.data = res.result;
+                        db.save(true); // Save locally without pushing back to cloud immediately
+                        alert("ডাটা রিস্টোর সফল হয়েছে!");
+                        location.reload();
+                    }
+                } catch(e) {
+                    alert("রিস্টোর ব্যর্থ হয়েছে: " + e.message);
+                }
+            }
+        };
+
+        // --- APP LOGIC ---
+        const db = {
+            data: { activeAccountId: 'def', accounts: [{id:'def', name:'দোকান ১', customers:[], transactions:[], products:[], inventoryLog:[]}], settings: {theme:'light'}},
+            load: function() {
+                const s = localStorage.getItem(DB_KEY);
+                if(s) { 
+                    try { 
+                        const p = JSON.parse(s);
+                        if(p.accounts) this.data = p; 
+                    } catch(e){} 
+                }
+                app.applyTheme();
+            },
+            save: function(skipCloud) {
+                localStorage.setItem(DB_KEY, JSON.stringify(this.data));
+                if(!skipCloud) gDrive.autoBackup(this.data);
+            },
+            getActive: function() { return this.data.accounts.find(a=>a.id===this.data.activeAccountId); }
+        };
+
+        const app = {
+            init: function() {
+                db.load();
+                this.nav('tally');
+                this.updateAccUI();
+                gDrive.init();
+            },
+            nav: function(t) {
+                document.querySelectorAll('.container').forEach(e=>e.classList.remove('active'));
+                document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
+                document.getElementById('back-btn').style.display='none';
+                document.getElementById('main-navbar').style.display='flex';
+                
+                if(t==='tally') { document.getElementById('view-tally-list').classList.add('active'); document.querySelectorAll('.nav-item')[0].classList.add('active'); tally.renderList(); }
+                if(t==='inventory') { document.getElementById('view-inventory').classList.add('active'); document.querySelectorAll('.nav-item')[1].classList.add('active'); inventory.renderList(); }
+                if(t==='settings') { document.getElementById('view-settings').classList.add('active'); document.querySelectorAll('.nav-item')[2].classList.add('active'); this.renderAccList(); }
+            },
+            goBack: function() {
+                if(document.getElementById('view-customer-detail').classList.contains('active')) this.nav('tally');
+                if(document.getElementById('view-product-detail').classList.contains('active')) this.nav('inventory');
+            },
+            openModal: (id) => document.getElementById(id).style.display='flex',
+            closeModal: (id) => document.getElementById(id).style.display='none',
+            toggleTheme: function() { db.data.settings.theme = db.data.settings.theme==='light'?'dark':'light'; db.save(); this.applyTheme(); },
+            applyTheme: function() { document.documentElement.setAttribute('data-theme', db.data.settings.theme); document.getElementById('theme-toggle').checked = db.data.settings.theme==='dark'; },
+            
+            // Accounts
+            renderAccList: function() {
+                document.getElementById('account-list').innerHTML = db.data.accounts.map(a => 
+                    `<div class="list-item"><b>${a.name}</b> ${a.id!==db.data.activeAccountId ? `<button class="btn-sm" onclick="app.switchAcc('${a.id}')">Switch</button>` : '<span class="text-small text-muted">Active</span>'}</div>`
+                ).join('');
+            },
+            createAccount: function() {
+                const n = document.getElementById('new-acc-name').value;
+                if(!n) return;
+                const id = 'acc_'+Date.now();
+                db.data.accounts.push({id, name:n, customers:[], transactions:[], products:[], inventoryLog:[]});
+                db.data.activeAccountId = id;
+                db.save(); location.reload();
+            },
+            switchAcc: function(id) { db.data.activeAccountId = id; db.save(); location.reload(); },
+            updateAccUI: function() { document.getElementById('active-acc-name').innerText = db.getActive().name; },
+            resetAll: function() { if(confirm("সব মুছবেন?")) { localStorage.removeItem(DB_KEY); location.reload(); }}
+        };
+
+        const tally = {
+            renderList: function() {
+                const d = db.getActive();
+                const q = document.getElementById('search-customer').value.toLowerCase();
+                const list = d.customers.filter(c=>c.name.toLowerCase().includes(q));
+                
+                let pabo=0, debo=0;
+                list.forEach(c => c.balance > 0 ? pabo += c.balance : debo += Math.abs(c.balance));
+                document.getElementById('dash-total-pabo').innerText = pabo;
+                document.getElementById('dash-total-debo').innerText = debo;
+                document.getElementById('dash-net-amount').innerText = Math.abs(pabo-debo);
+                document.getElementById('dash-net-status').innerText = (pabo-debo)>=0 ? "আমি পাবো" : "দেবো";
+                
+                document.getElementById('customer-list').innerHTML = list.map(c => 
+                    `<div class="list-item" onclick="app.currentCustomer='${c.id}'; tally.viewCustomer()">
+                        <div class="d-flex"><div class="customer-avatar">${c.name[0]}</div><div><b>${c.name}</b><br><small>${c.phone||''}</small></div></div>
+                        <span class="${c.balance>=0?'balance-pos':'balance-neg'}">${c.balance}</span>
+                    </div>`
+                ).join('');
+            },
+            viewCustomer: function() {
+                const c = db.getActive().customers.find(x=>x.id===app.currentCustomer);
+                document.querySelectorAll('.container').forEach(e=>e.classList.remove('active'));
+                document.getElementById('view-customer-detail').classList.add('active');
+                document.getElementById('back-btn').style.display='block';
+                document.getElementById('main-navbar').style.display='none';
+                
+                document.getElementById('cd-name').innerText = c.name;
+                document.getElementById('cd-phone').innerText = c.phone;
+                document.getElementById('cd-net-balance').innerText = Math.abs(c.balance);
+                document.getElementById('cd-balance-status').innerText = c.balance >= 0 ? "পাবেন" : "দেবেন";
+
+                // Stats & List
+                let due=0, paid=0;
+                const txs = db.getActive().transactions.filter(t=>t.customerId===c.id);
+                txs.forEach(t => t.type==='due'?due+=t.amount:paid+=t.amount);
+                document.getElementById('cd-total-due').innerText = due;
+                document.getElementById('cd-total-paid').innerText = paid;
+
+                document.getElementById('customer-tx-list').innerHTML = txs.reverse().map(t => 
+                    `<div class="list-item">
+                        <div><b>${t.note}</b><br><small>${t.date}</small></div>
+                        <div style="text-align:right;"><span class="${t.type==='payment'?'tx-type-payment':'tx-type-sale'}">${t.type==='payment'?'জমা':'বাকি'}</span><br><b>${t.amount}</b></div>
+                    </div>`
+                ).join('');
+                
+                document.getElementById('header-action').innerHTML = '⚙️';
+                document.getElementById('header-action').onclick = ()=>app.openModal('modal-c-actions');
+            },
+            openTransModal: function(type) {
+                document.getElementById('tx-type').value = type;
+                document.getElementById('tx-id').value = ''; document.getElementById('tx-amount').value='';
+                document.getElementById('tx-date').valueAsDate = new Date();
+                app.openModal('modal-trans');
+            },
+            saveTransaction: function() {
+                const amt = parseFloat(document.getElementById('tx-amount').value);
+                if(!amt) return;
+                const type = document.getElementById('tx-type').value;
+                const c = db.getActive().customers.find(x=>x.id===app.currentCustomer);
+                
+                db.getActive().transactions.push({
+                    id:'tx_'+Date.now(), customerId:c.id, type, amount:amt, 
+                    note: document.getElementById('tx-note').value, date: document.getElementById('tx-date').value
+                });
+                
+                if(type==='due') c.balance += amt; else c.balance -= amt;
+                db.save(); app.closeModal('modal-trans'); this.viewCustomer();
+            },
+            openSellModal: function(cid) {
+                const d = db.getActive();
+                if(!d.products.length) return alert("পণ্য নেই");
+                document.getElementById('sell-c-select').innerHTML = `<option value="">-- ক্যাশ --</option>` + d.customers.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+                document.getElementById('sell-p-select').innerHTML = d.products.map(p=>`<option value="${p.id}" data-p="${p.sell}">${p.name} (${p.stock})</option>`).join('');
+                if(cid) document.getElementById('sell-c-select').value = cid;
+                this.updateSellPrice();
+                app.openModal('modal-sell');
+            },
+            updateSellPrice: function() {
+                const s = document.getElementById('sell-p-select');
+                document.getElementById('sell-rate').value = s.options[s.selectedIndex].getAttribute('data-p');
+                this.updateSellTotal();
+            },
+            updateSellTotal: function() { document.getElementById('sell-total').innerText = (document.getElementById('sell-qty').value * document.getElementById('sell-rate').value).toFixed(0); },
+            confirmSell: function() {
+                const pid = document.getElementById('sell-p-select').value;
+                const cid = document.getElementById('sell-c-select').value;
+                const qty = parseFloat(document.getElementById('sell-qty').value);
+                const rate = parseFloat(document.getElementById('sell-rate').value);
+                const d = db.getActive();
+                const p = d.products.find(x=>x.id===pid);
+                
+                if(p.stock < qty) return alert("স্টক কম");
+                p.stock -= qty;
+                
+                d.inventoryLog.push({id:'l_'+Date.now(), productId:pid, type:'out', qty, rate, date:new Date().toISOString().split('T')[0], note:'Sold'});
+                if(cid) {
+                    d.transactions.push({id:'tx_'+Date.now(), customerId:cid, type:'due', amount:qty*rate, note:`Sold ${p.name} x${qty}`, date:new Date().toISOString().split('T')[0]});
+                    d.customers.find(x=>x.id===cid).balance += (qty*rate);
+                }
+                db.save(); app.closeModal('modal-sell'); app.nav('inventory');
+            }
+        };
+
+        const customer = {
+            save: function() {
+                const n = document.getElementById('c-name').value;
+                if(!n) return;
+                const id = document.getElementById('c-id').value;
+                const d = db.getActive();
+                if(id) {
+                    const c = d.customers.find(x=>x.id===id);
+                    c.name=n; c.phone=document.getElementById('c-phone').value; c.address=document.getElementById('c-address').value;
+                } else {
+                    d.customers.push({id:'c_'+Date.now(), name:n, phone:document.getElementById('c-phone').value, address:document.getElementById('c-address').value, balance:0});
+                }
+                db.save(); app.closeModal('modal-customer'); tally.renderList();
+            },
+            editCurrent: function() {
+                const c = db.getActive().customers.find(x=>x.id===app.currentCustomer);
+                app.closeModal('modal-c-actions');
+                document.getElementById('c-id').value=c.id; document.getElementById('c-name').value=c.name; document.getElementById('c-phone').value=c.phone;
+                app.openModal('modal-customer');
+            },
+            deleteCurrent: function() {
+                if(!confirm("নিশ্চিত?")) return;
+                const d = db.getActive();
+                d.customers = d.customers.filter(c=>c.id!==app.currentCustomer);
+                db.save(); app.closeModal('modal-c-actions'); app.nav('tally');
+            }
+        };
+
+        const inventory = {
+            renderList: function() {
+                const q = document.getElementById('search-product').value.toLowerCase();
+                const list = db.getActive().products.filter(p=>p.name.toLowerCase().includes(q));
+                
+                let val=0, profit=0;
+                list.forEach(p=>{ val+=p.stock*p.buy; profit+=p.stock*(p.sell-p.buy); });
+                document.getElementById('inv-stock-value').innerText = val;
+                document.getElementById('inv-profit-est').innerText = profit;
+
+                document.getElementById('product-list').innerHTML = list.map(p => 
+                    `<div class="list-item" onclick="app.currentProduct='${p.id}'; inventory.viewDetail()">
+                        <div><b>${p.name}</b><br><small>Buy:${p.buy} Sell:${p.sell}</small></div>
+                        <span class="stock-badge">${p.stock} ${p.unit}</span>
+                    </div>`
+                ).join('');
+            },
+            openModal: () => { ['p-id','p-name','p-buy','p-sell','p-stock'].forEach(i=>document.getElementById(i).value=''); app.openModal('modal-product'); },
+            save: function() {
+                const n = document.getElementById('p-name').value;
+                if(!n) return;
+                const id = document.getElementById('p-id').value;
+                const d = db.getActive();
+                const obj = {
+                    id: id || 'p_'+Date.now(), name:n, 
+                    buy: parseFloat(document.getElementById('p-buy').value)||0,
+                    sell: parseFloat(document.getElementById('p-sell').value)||0,
+                    stock: parseFloat(document.getElementById('p-stock').value)||0,
+                    unit: document.getElementById('p-unit').value || 'Pcs'
+                };
+                if(id) { const i=d.products.findIndex(x=>x.id===id); d.products[i]=obj; } 
+                else d.products.push(obj);
+                db.save(); app.closeModal('modal-product'); inventory.renderList();
+            },
+            viewDetail: function() {
+                const p = db.getActive().products.find(x=>x.id===app.currentProduct);
+                document.querySelectorAll('.container').forEach(e=>e.classList.remove('active'));
+                document.getElementById('view-product-detail').classList.add('active');
+                document.getElementById('back-btn').style.display='block';
+                
+                document.getElementById('pd-name').innerText = p.name;
+                document.getElementById('pd-stock').innerText = p.stock;
+                document.getElementById('pd-stock-val').innerText = p.stock*p.buy;
+                
+                const logs = db.getActive().inventoryLog.filter(l=>l.productId===p.id);
+                document.getElementById('product-history-list').innerHTML = logs.reverse().map(l=>
+                    `<div class="list-item"><div>${l.type==='in'?'In':'Out'} <small>${l.date}</small></div><b>${l.qty}</b></div>`
+                ).join('');
+            },
+            stockAction: function(t) {
+                if(t==='sell') tally.openSellModal(null);
+                else {
+                    const p = db.getActive().products.find(x=>x.id===app.currentProduct);
+                    document.getElementById('sin-p-name').innerText=p.name; document.getElementById('sin-qty').value='';
+                    app.openModal('modal-stock-in');
+                }
+            },
+            confirmStockIn: function() {
+                const qty = parseFloat(document.getElementById('sin-qty').value);
+                if(!qty) return;
+                const d = db.getActive();
+                const p = d.products.find(x=>x.id===app.currentProduct);
+                p.stock += qty;
+                d.inventoryLog.push({id:'l_'+Date.now(), productId:p.id, type:'in', qty, date:new Date().toISOString().split('T')[0]});
+                db.save(); app.closeModal('modal-stock-in'); this.viewDetail();
+            },
+            editCurrent: function() {
+                const p = db.getActive().products.find(x=>x.id===app.currentProduct);
+                document.getElementById('p-id').value=p.id; document.getElementById('p-name').value=p.name;
+                document.getElementById('p-buy').value=p.buy; document.getElementById('p-sell').value=p.sell;
+                document.getElementById('p-stock').value=p.stock; document.getElementById('p-unit').value=p.unit;
+                app.openModal('modal-product');
+            },
+            deleteCurrent: function() {
+                if(!confirm("মুছবেন?")) return;
+                const d = db.getActive();
+                d.products = d.products.filter(p=>p.id!==app.currentProduct);
+                db.save(); app.nav('inventory');
+            }
+        };
+
+        const dataManager = {
+            exportJSON: () => {
+                const a = document.createElement('a');
+                a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db.data));
+                a.download = "backup.json"; a.click();
+            },
+            importJSON: (input) => {
+                const fr = new FileReader();
+                fr.onload = e => { try { db.data = JSON.parse(e.target.result); db.save(); location.reload(); } catch(e){} };
+                fr.readAsText(input.files[0]);
+            }
+        };
+
+        window.onload = app.init.bind(app);
+    </script>
+</body>
+</html>
