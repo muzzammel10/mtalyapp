@@ -6,9 +6,9 @@
     <title>স্মার্ট টালি ও ইনভেন্টরি প্রো</title>
     <meta name="theme-color" content="#009688">
     
-    <!-- Google API Scripts -->
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
+    <!-- Google API Scripts (Added async defer to prevent blocking) -->
+    <script src="https://apis.google.com/js/api.js" async defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     
     <style>
         :root {
@@ -751,14 +751,36 @@
                 if(!n) return alert("দোকানের নাম লিখুন");
                 db.createAccount(n);
                 document.getElementById('new-acc-name').value = ''; 
-                location.reload();
+                this.switch(db.state.activeId); // Switch to new immediately
             },
+            
+            // === [FIXED] SWITCH FUNCTION WITHOUT RELOAD ===
             switch: function(id) {
-                if(db.state.activeId === id) return; 
+                if(db.state.activeId === id) return;
+                
+                // 1. Set Active ID
                 db.state.activeId = id;
                 db.saveLocal();
-                location.reload();
+                
+                // 2. Update Header Name
+                const acc = db.active();
+                document.getElementById('active-acc-name').innerText = acc.name + " ▼";
+
+                // 3. Reset Internal State (To avoid mixing data)
+                app.currentCustomer = null;
+                app.currentProduct = null;
+                filter.type = 'all'; // Reset filter
+
+                // 4. Force go to Main Tally List (To be safe)
+                app.nav('tally');
+
+                // 5. Close Modal
+                app.closeModal('modal-accounts');
+                
+                // 6. Provide visual feedback (Optional)
+                // alert(acc.name + " নির্বাচিত হয়েছে");
             },
+
             rename: function(id, oldName) {
                 const newName = prompt("দোকানের নতুন নাম দিন:", oldName);
                 if (newName && newName.trim() !== "") {
