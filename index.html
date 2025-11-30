@@ -789,107 +789,144 @@
             }
         };
 
-        // ========================
-        // 4. GOOGLE DRIVE INTEGRATION
-        // ========================
-        const gDrive = {
-            tokenClient: null, accessToken: null, fileId: null,
-            init: function() {
-                // Check if Google Library Loaded
-                if (typeof google === 'undefined' || !google.accounts) {
-                    console.warn("Google Scripts not loaded yet. Retrying in 1s...");
-                    setTimeout(() => this.init(), 1000);
-                    return;
-                }
-                
-                try {
-                    this.tokenClient = google.accounts.oauth2.initTokenClient({
-                        client_id: CONFIG.CLIENT_ID, 
-                        scope: 'https://www.googleapis.com/auth/drive.appdata',
-                        callback: (resp) => {
-                            if (resp.error) throw resp;
-                            this.accessToken = resp.access_token;
-                            localStorage.setItem('g_token', this.accessToken);
-                            this.updateUI(true); 
-                            this.findBackupFile();
-                        },
-                    });
-                    
-                    if(localStorage.getItem('g_token')) { 
-                        this.accessToken = localStorage.getItem('g_token'); 
-                        this.updateUI(true); 
-                        this.findBackupFile(); 
-                    }
-                } catch(e) { console.error("GDrive Init Error:", e); }
-            },
-            handleAuthClick: function() { 
-                if(!this.tokenClient) {
-                    if(typeof google === 'undefined') return alert("ইন্টারনেট সংযোগ চেক করুন। গুগল স্ক্রিপ্ট লোড হয়নি।");
-                    return alert("দয়া করে পেজটি রিফ্রেশ দিন এবং আবার চেষ্টা করুন।");
-                }
-                this.tokenClient.requestAccessToken({prompt: ''}); 
-            },
-            signOut: function() { 
-                this.accessToken = null; 
-                localStorage.removeItem('g_token'); 
-                this.updateUI(false); 
-                alert("Signed out"); 
-            },
-            updateUI: function(connected) {
-                const ui = document.getElementById('drive-ui-area');
-                const actions = document.getElementById('drive-actions');
-                const status = document.getElementById('drive-status');
-                if(connected) { ui.style.display='none'; actions.style.display='block'; status.style.background='#2ecc71'; } 
-                else { ui.style.display='block'; actions.style.display='none'; status.style.background='#ccc'; }
-            },
-            findBackupFile: async function() {
-                if (!this.accessToken) return;
-                try {
-                    const res = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='smart_tally_backup.json'&fields=files(id, name)", { headers: { 'Authorization': `Bearer ${this.accessToken}` } });
-                    const data = await res.json();
-                    if (data.files && data.files.length > 0) this.fileId = data.files[0].id;
-                } catch (e) { console.error("Find File Error", e); }
-            },
-            saveToDrive: async function(jsonData, isAuto) {
-                if (!this.accessToken) return;
-                document.getElementById('drive-status').style.background = '#f1c40f'; // Yellow = Processing
-                
-                if(!isAuto) alert("ব্যাকআপ শুরু হচ্ছে... অপেক্ষা করুন।");
-
-                const blob = new Blob([JSON.stringify(jsonData)], { type: 'application/json' });
-                const metadata = { name: 'smart_tally_backup.json', parents: ['appDataFolder'] };
-                let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', method = 'POST';
-                
-                if (this.fileId) { 
-                    url = `https://www.googleapis.com/upload/drive/v3/files/${this.fileId}?uploadType=media`; 
-                    method = 'PATCH'; 
-                }
-                
-                const form = new FormData();
-                if(!this.fileId) form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                form.append('file', blob);
-                
-                try {
-                    await fetch(url, { method: method, headers: { 'Authorization': `Bearer ${this.accessToken}` }, body: this.fileId ? blob : form });
-                    setTimeout(() => document.getElementById('drive-status').style.background = '#2ecc71', 1000); 
-                    if(!isAuto) alert("✅ ব্যাকআপ সফল হয়েছে!");
-                } catch (e) { 
-                    document.getElementById('drive-status').style.background = 'red'; 
-                    if(!isAuto) alert("❌ ব্যাকআপ ব্যর্থ হয়েছে!");
-                }
-            },
-            restoreFromDrive: async function() {
-                if(!this.fileId) { await this.findBackupFile(); }
-                if(!this.fileId) return alert("কোনো ব্যাকআপ পাওয়া যায়নি।");
-                if(!confirm("ড্রাইভ থেকে রিস্টোর করলে বর্তমান ডাটা মুছে যাবে। আপনি কি নিশ্চিত?")) return;
-                try {
-                    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${this.fileId}?alt=media`, { headers: { 'Authorization': `Bearer ${this.accessToken}` } });
-                    const data = await res.json();
-                    db.state = data; db.saveLocal();
-                    alert("রিস্টোর সফল হয়েছে!"); location.reload();
-                } catch(e) { alert("Restore Failed"); }
+       // ========================
+// 4. GOOGLE DRIVE INTEGRATION (UPDATED)
+// ========================
+const gDrive = {
+    tokenClient: null, accessToken: null, fileId: null,
+    init: function() {
+        if (typeof google === 'undefined' || !google.accounts) {
+            console.warn("Google Scripts not loaded. Retrying...");
+            setTimeout(() => this.init(), 1000);
+            return;
+        }
+        
+        try {
+            this.tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CONFIG.CLIENT_ID, 
+                scope: 'https://www.googleapis.com/auth/drive.appdata',
+                callback: (resp) => {
+                    if (resp.error) throw resp;
+                    this.accessToken = resp.access_token;
+                    localStorage.setItem('g_token', this.accessToken);
+                    this.updateUI(true); 
+                    this.findBackupFile(); // লগিন করার সাথে সাথে ফাইল খুঁজবে
+                },
+            });
+            
+            if(localStorage.getItem('g_token')) { 
+                this.accessToken = localStorage.getItem('g_token'); 
+                this.updateUI(true); 
+                // পেজ লোড হলে একটু সময় নিয়ে ফাইল খুঁজবে
+                setTimeout(() => this.findBackupFile(), 1000); 
             }
-        };
+        } catch(e) { console.error("GDrive Init Error:", e); }
+    },
+    handleAuthClick: function() { 
+        if(!this.tokenClient) return alert("গুগল কানেকশন লোড হয়নি। পেজ রিফ্রেশ দিন।");
+        this.tokenClient.requestAccessToken({prompt: ''}); 
+    },
+    signOut: function() { 
+        this.accessToken = null; 
+        this.fileId = null; // ফাইল আইডি রিসেট
+        localStorage.removeItem('g_token'); 
+        this.updateUI(false); 
+        alert("Signed out"); 
+    },
+    updateUI: function(connected) {
+        const ui = document.getElementById('drive-ui-area');
+        const actions = document.getElementById('drive-actions');
+        const status = document.getElementById('drive-status');
+        if(connected) { ui.style.display='none'; actions.style.display='block'; status.style.background='#2ecc71'; } 
+        else { ui.style.display='block'; actions.style.display='none'; status.style.background='#ccc'; }
+    },
+    // ফিক্সড: ফাইল খোঁজার লজিক আপডেট করা হয়েছে
+    findBackupFile: async function() {
+        if (!this.accessToken) return;
+        try {
+            // trashed = false যোগ করা হয়েছে যাতে ডিলেট হওয়া ফাইল না আসে
+            // এবং Query String এনকোড করা হয়েছে
+            const q = "name = 'smart_tally_backup.json' and trashed = false";
+            const url = "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id, name)&q=" + encodeURIComponent(q);
+
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.accessToken}` } });
+            const data = await res.json();
+            
+            if (data.files && data.files.length > 0) {
+                this.fileId = data.files[0].id;
+                console.log("Backup Found ID:", this.fileId);
+            } else {
+                this.fileId = null;
+                console.log("No existing backup found.");
+            }
+        } catch (e) { console.error("Find File Error", e); }
+    },
+    saveToDrive: async function(jsonData, isAuto) {
+        if (!this.accessToken) return;
+        
+        // সেভ করার আগে একবার ফাইল আছে কিনা চেক করে নিবে
+        if(!this.fileId) await this.findBackupFile();
+
+        document.getElementById('drive-status').style.background = '#f1c40f'; 
+        if(!isAuto) alert("ব্যাকআপ শুরু হচ্ছে... অপেক্ষা করুন।");
+
+        const blob = new Blob([JSON.stringify(jsonData)], { type: 'application/json' });
+        const metadata = { name: 'smart_tally_backup.json', parents: ['appDataFolder'] };
+        
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+        let method = 'POST';
+        
+        // যদি ফাইল আগে থেকে থাকে, তবে সেটি আপডেট করবে (PATCH)
+        if (this.fileId) { 
+            url = `https://www.googleapis.com/upload/drive/v3/files/${this.fileId}?uploadType=media`; 
+            method = 'PATCH'; 
+        }
+        
+        const form = new FormData();
+        if(!this.fileId) form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', blob);
+        
+        try {
+            const res = await fetch(url, { method: method, headers: { 'Authorization': `Bearer ${this.accessToken}` }, body: this.fileId ? blob : form });
+            const respData = await res.json();
+            
+            // নতুন ফাইল তৈরি হলে আইডি সেট করবে
+            if(!this.fileId && respData.id) this.fileId = respData.id;
+
+            setTimeout(() => document.getElementById('drive-status').style.background = '#2ecc71', 1000); 
+            if(!isAuto) alert("✅ ব্যাকআপ সফল হয়েছে!");
+        } catch (e) { 
+            document.getElementById('drive-status').style.background = 'red'; 
+            console.error(e);
+            if(!isAuto) alert("❌ ব্যাকআপ ব্যর্থ হয়েছে!");
+        }
+    },
+    restoreFromDrive: async function() {
+        // রিস্টোর বাটনে চাপ দিলে আবার নতুন করে খুঁজবে
+        await this.findBackupFile();
+        
+        if(!this.fileId) return alert("কোনো ব্যাকআপ পাওয়া যায়নি। (আগে 'Backup to Drive' বাটনে ক্লিক করে ব্যাকআপ তৈরি করুন)");
+        
+        if(!confirm("সতর্কতা: ড্রাইভ থেকে রিস্টোর করলে আপনার মোবাইলে থাকা বর্তমান ডাটা মুছে যাবে এবং ড্রাইভের ডাটা দিয়ে রিপ্লেস হবে। আপনি কি নিশ্চিত?")) return;
+        
+        try {
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${this.fileId}?alt=media`, { headers: { 'Authorization': `Bearer ${this.accessToken}` } });
+            const data = await res.json();
+            
+            if(data && (data.accounts || data.customers)) {
+                db.state = data; 
+                db.saveLocal();
+                alert("✅ রিস্টোর সফল হয়েছে! অ্যাপ রিফ্রেশ হচ্ছে..."); 
+                location.reload();
+            } else {
+                alert("ব্যাকআপ ফাইলটি খালি বা নষ্ট হয়ে গেছে।");
+            }
+        } catch(e) { 
+            console.error(e);
+            alert("Restore Failed: নেটওয়ার্ক সমস্যা বা টোকেন মেয়াদোত্তীর্ণ। আবার Sign Out করে Sign In করুন।"); 
+        }
+    }
+};
 
         // ========================
         // 5. APP LOGIC
