@@ -341,22 +341,32 @@
 
     <!-- 5. SETTINGS VIEW -->
     <div id="view-settings" class="container">
+        <!-- Google Drive Card -->
         <div class="card">
             <h3>Google Drive Backup</h3>
             <p class="text-muted" style="margin:10px 0;">আপনার ডাটা সুরক্ষিত রাখতে Google Drive কানেক্ট করুন।</p>
+            
+            <!-- কানেক্ট না থাকলে এই বাটন দেখাবে -->
             <div id="drive-ui-area">
                 <button id="btn-g-connect" onclick="gDrive.handleAuthClick()" style="background:#4285F4;">Connect Google Drive</button>
             </div>
+
+            <!-- কানেক্ট হওয়ার পর এই অংশ দেখাবে -->
             <div id="drive-actions" style="display:none; margin-top:10px;">
                 <p style="color:green; font-weight:bold; margin-bottom:10px;">✅ Connected</p>
-                <button class="btn-outline" onclick="gDrive.restoreFromDrive()">☁️ Restore from Drive</button>
+                
+                <!-- নতুন ব্যাকআপ বাটন -->
+                <button class="btn-success" onclick="gDrive.saveToDrive(db.state)" style="margin-bottom:10px;">☁️ Backup to Drive</button>
+                
+                <button class="btn-outline" onclick="gDrive.restoreFromDrive()">📥 Restore from Drive</button>
                 <button class="btn-danger" onclick="gDrive.signOut()" style="margin-top:10px;">Sign Out</button>
             </div>
         </div>
 
+        <!-- Local Data Management Card -->
         <div class="card">
             <h3>ডাটা ম্যানেজমেন্ট</h3>
-            <button class="btn-outline" onclick="dataManager.exportJSON()" style="margin-top:10px;">📥 ব্যাকআপ ডাউনলোড</button>
+            <button class="btn-outline" onclick="dataManager.exportJSON()" style="margin-top:10px;">📥 ব্যাকআপ ডাউনলোড (Phone)</button>
             <input type="file" id="import-file" style="margin-top:10px;" onchange="dataManager.importJSON(this)">
             <button class="btn-danger" onclick="app.resetAll()" style="margin-top:20px;">⚠️ সব ডাটা মুছুন</button>
         </div>
@@ -548,6 +558,11 @@
             <input type="number" id="sin-qty" placeholder="পরিমাণ">
             <label id="sin-cost-label" class="text-muted">ক্রয় মূল্য</label>
             <input type="number" id="sin-cost" placeholder="দর">
+            
+            <!-- Note Input -->
+            <label class="text-muted">নোট (অপশনাল)</label>
+            <input type="text" id="sin-note" placeholder="নোট লিখুন...">
+
             <div class="btn-group">
                 <button class="btn-outline" onclick="app.closeModal('modal-stock-in')">বাতিল</button>
                 <button onclick="inventory.confirmStockIn()">নিশ্চিত করুন</button>
@@ -589,20 +604,20 @@
     </div>
 
     <script>
-        // ========================
-        // CONFIGURATION
+       // ========================
+        // 1. CONFIGURATION
         // ========================
         const CONFIG = {
             CLIENT_ID: "229880141922-3qbr26c4c4j3lboh6qaaonlo6rl5fci2.apps.googleusercontent.com",
             API_KEY: "YOUR_API_KEY_HERE", 
-            DB_KEY: 'smart_tally_pro_v1' // Old key maintained to preserve data
+            DB_KEY: 'smart_tally_pro_v1' 
         };
 
         // ========================
-        // FILTER SYSTEM (DEFAULT: ALL)
+        // 2. FILTER SYSTEM
         // ========================
         const filter = {
-            type: 'all', // Changed default to 'all'
+            type: 'all',
             date: new Date(),
             set: function(t, el) {
                 this.type = t;
@@ -626,7 +641,7 @@
                 const disp = document.getElementById('filter-date-display');
                 const d = this.date;
                 if(this.type === 'all') {
-                    nav.style.display = 'none'; // Hide date nav for All
+                    nav.style.display = 'none'; 
                 } else {
                     nav.style.display = 'flex';
                     if(this.type === 'daily') disp.innerText = d.toLocaleDateString('bn-BD', {day:'numeric', month:'long', year:'numeric'});
@@ -656,26 +671,18 @@
         };
 
         // ========================
-        // DB & MULTI-ACCOUNT SYSTEM (FULL BACKUP SUPPORT)
+        // 3. DATABASE & BACKUP SYSTEM
         // ========================
         const db = {
-            // ডিফল্ট স্টেট
-            state: { 
-                accounts: [], 
-                activeId: null 
-            },
+            state: { accounts: [], activeId: null },
             init: function() {
                 const s = localStorage.getItem(CONFIG.DB_KEY);
                 if(s) {
                     try { 
                         const parsed = JSON.parse(s);
-                        
-                        // ১. চেক করা হচ্ছে এটি নতুন (Multi-Account) ফরম্যাট কিনা
                         if(parsed.accounts && Array.isArray(parsed.accounts)) {
                             this.state = parsed;
-                        } 
-                        // ২. যদি পুরনো (Single Account) ফরম্যাট হয়, তবে কনভার্ট করা হবে
-                        else if(parsed.customers) {
+                        } else if(parsed.customers) {
                             this.state.accounts = [{
                                 id: 'acc_def', 
                                 name: 'দোকান ১', 
@@ -686,21 +693,18 @@
                                 }
                             }];
                             this.state.activeId = 'acc_def';
-                            this.saveLocal(); // কনভার্ট করে সেভ করে নেওয়া হলো
+                            this.saveLocal(); 
                         }
                     } catch(e) { console.error("DB Load Error", e); }
                 }
-                
-                // যদি কোনো অ্যাকাউন্ট না থাকে (প্রথমবার ওপেন)
                 if(this.state.accounts.length === 0) {
                     this.createAccount('আমার দোকান');
                 }
-                
-                // ৩. প্রতিটি অ্যাকাউন্টের ডাটা ঠিক আছে কিনা চেক করা (Sanity Check)
+                // Data Sanity Check
                 this.state.accounts.forEach(acc => {
                     if(!acc.data) acc.data = {};
                     if(!acc.data.customers) acc.data.customers = [];
-                    if(!acc.data.products) acc.data.products = []; // ইনভেন্টরি মিসিং থাকলে ফিক্স করবে
+                    if(!acc.data.products) acc.data.products = [];
                     if(!acc.data.inventoryLog) acc.data.inventoryLog = [];
                 });
             },
@@ -715,12 +719,14 @@
                 this.saveLocal();
             },
             active: function() {
-                // বর্তমান সিলেক্ট করা দোকান রিটার্ন করে
                 return this.state.accounts.find(a => a.id === this.state.activeId) || this.state.accounts[0];
             },
             save: function() { 
                 this.saveLocal(); 
-                // gDrive.saveToDrive(this.state); // যদি গুগল ড্রাইভ ব্যবহার করেন
+                // AUTO BACKUP LOGIC
+                if(gDrive.accessToken && navigator.onLine) {
+                    gDrive.saveToDrive(this.state, true); 
+                }
             },
             saveLocal: function() { 
                 localStorage.setItem(CONFIG.DB_KEY, JSON.stringify(this.state)); 
@@ -751,36 +757,20 @@
                 if(!n) return alert("দোকানের নাম লিখুন");
                 db.createAccount(n);
                 document.getElementById('new-acc-name').value = ''; 
-                this.switch(db.state.activeId); // Switch to new immediately
+                this.switch(db.state.activeId);
             },
-            
-            // === [FIXED] SWITCH FUNCTION WITHOUT RELOAD ===
             switch: function(id) {
                 if(db.state.activeId === id) return;
-                
-                // 1. Set Active ID
                 db.state.activeId = id;
                 db.saveLocal();
-                
-                // 2. Update Header Name
                 const acc = db.active();
                 document.getElementById('active-acc-name').innerText = acc.name + " ▼";
-
-                // 3. Reset Internal State (To avoid mixing data)
                 app.currentCustomer = null;
                 app.currentProduct = null;
-                filter.type = 'all'; // Reset filter
-
-                // 4. Force go to Main Tally List (To be safe)
+                filter.type = 'all';
                 app.nav('tally');
-
-                // 5. Close Modal
                 app.closeModal('modal-accounts');
-                
-                // 6. Provide visual feedback (Optional)
-                // alert(acc.name + " নির্বাচিত হয়েছে");
             },
-
             rename: function(id, oldName) {
                 const newName = prompt("দোকানের নতুন নাম দিন:", oldName);
                 if (newName && newName.trim() !== "") {
@@ -800,28 +790,55 @@
         };
 
         // ========================
-        // GOOGLE DRIVE
+        // 4. GOOGLE DRIVE INTEGRATION
         // ========================
         const gDrive = {
             tokenClient: null, accessToken: null, fileId: null,
             init: function() {
+                // Check if Google Library Loaded
+                if (typeof google === 'undefined' || !google.accounts) {
+                    console.warn("Google Scripts not loaded yet. Retrying in 1s...");
+                    setTimeout(() => this.init(), 1000);
+                    return;
+                }
+                
                 try {
                     this.tokenClient = google.accounts.oauth2.initTokenClient({
-                        client_id: CONFIG.CLIENT_ID, scope: 'https://www.googleapis.com/auth/drive.appdata',
+                        client_id: CONFIG.CLIENT_ID, 
+                        scope: 'https://www.googleapis.com/auth/drive.appdata',
                         callback: (resp) => {
                             if (resp.error) throw resp;
                             this.accessToken = resp.access_token;
                             localStorage.setItem('g_token', this.accessToken);
-                            this.updateUI(true); this.findBackupFile();
+                            this.updateUI(true); 
+                            this.findBackupFile();
                         },
                     });
-                    if(localStorage.getItem('g_token')) { this.accessToken = localStorage.getItem('g_token'); this.updateUI(true); this.findBackupFile(); }
-                } catch(e) {}
+                    
+                    if(localStorage.getItem('g_token')) { 
+                        this.accessToken = localStorage.getItem('g_token'); 
+                        this.updateUI(true); 
+                        this.findBackupFile(); 
+                    }
+                } catch(e) { console.error("GDrive Init Error:", e); }
             },
-            handleAuthClick: function() { this.tokenClient.requestAccessToken({prompt: ''}); },
-            signOut: function() { this.accessToken = null; localStorage.removeItem('g_token'); this.updateUI(false); alert("Signed out"); },
+            handleAuthClick: function() { 
+                if(!this.tokenClient) {
+                    if(typeof google === 'undefined') return alert("ইন্টারনেট সংযোগ চেক করুন। গুগল স্ক্রিপ্ট লোড হয়নি।");
+                    return alert("দয়া করে পেজটি রিফ্রেশ দিন এবং আবার চেষ্টা করুন।");
+                }
+                this.tokenClient.requestAccessToken({prompt: ''}); 
+            },
+            signOut: function() { 
+                this.accessToken = null; 
+                localStorage.removeItem('g_token'); 
+                this.updateUI(false); 
+                alert("Signed out"); 
+            },
             updateUI: function(connected) {
-                const ui = document.getElementById('drive-ui-area'), actions = document.getElementById('drive-actions'), status = document.getElementById('drive-status');
+                const ui = document.getElementById('drive-ui-area');
+                const actions = document.getElementById('drive-actions');
+                const status = document.getElementById('drive-status');
                 if(connected) { ui.style.display='none'; actions.style.display='block'; status.style.background='#2ecc71'; } 
                 else { ui.style.display='block'; actions.style.display='none'; status.style.background='#ccc'; }
             },
@@ -831,22 +848,35 @@
                     const res = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='smart_tally_backup.json'&fields=files(id, name)", { headers: { 'Authorization': `Bearer ${this.accessToken}` } });
                     const data = await res.json();
                     if (data.files && data.files.length > 0) this.fileId = data.files[0].id;
-                } catch (e) {}
+                } catch (e) { console.error("Find File Error", e); }
             },
-            saveToDrive: async function(jsonData) {
+            saveToDrive: async function(jsonData, isAuto) {
                 if (!this.accessToken) return;
-                document.getElementById('drive-status').style.background = '#f1c40f'; 
+                document.getElementById('drive-status').style.background = '#f1c40f'; // Yellow = Processing
+                
+                if(!isAuto) alert("ব্যাকআপ শুরু হচ্ছে... অপেক্ষা করুন।");
+
                 const blob = new Blob([JSON.stringify(jsonData)], { type: 'application/json' });
                 const metadata = { name: 'smart_tally_backup.json', parents: ['appDataFolder'] };
                 let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', method = 'POST';
-                if (this.fileId) { url = `https://www.googleapis.com/upload/drive/v3/files/${this.fileId}?uploadType=media`; method = 'PATCH'; }
+                
+                if (this.fileId) { 
+                    url = `https://www.googleapis.com/upload/drive/v3/files/${this.fileId}?uploadType=media`; 
+                    method = 'PATCH'; 
+                }
+                
                 const form = new FormData();
                 if(!this.fileId) form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 form.append('file', blob);
+                
                 try {
                     await fetch(url, { method: method, headers: { 'Authorization': `Bearer ${this.accessToken}` }, body: this.fileId ? blob : form });
                     setTimeout(() => document.getElementById('drive-status').style.background = '#2ecc71', 1000); 
-                } catch (e) { document.getElementById('drive-status').style.background = 'red'; }
+                    if(!isAuto) alert("✅ ব্যাকআপ সফল হয়েছে!");
+                } catch (e) { 
+                    document.getElementById('drive-status').style.background = 'red'; 
+                    if(!isAuto) alert("❌ ব্যাকআপ ব্যর্থ হয়েছে!");
+                }
             },
             restoreFromDrive: async function() {
                 if(!this.fileId) { await this.findBackupFile(); }
@@ -862,7 +892,7 @@
         };
 
         // ========================
-        // CORE APP LOGIC
+        // 5. APP LOGIC
         // ========================
         const app = {
             currentCustomer: null, currentProduct: null,
@@ -910,7 +940,7 @@
         };
 
         // ========================
-        // TALLY LOGIC
+        // 6. TALLY LOGIC
         // ========================
         const tally = {
             currentTxId: null,
@@ -953,13 +983,8 @@
                 }
                 
                 const txs = (c.transactions || []).filter(t => filter.check(t.date));
-                
                 let totalGiven = 0, totalReceived = 0;
-                txs.forEach(t => { 
-                    if(t.type === 'due') totalGiven += t.amount; 
-                    else totalReceived += t.amount; 
-                });
-
+                txs.forEach(t => { if(t.type === 'due') totalGiven += t.amount; else totalReceived += t.amount; });
                 const periodBalance = totalGiven - totalReceived;
 
                 document.getElementById('cd-name').innerText = c.name;
@@ -1028,7 +1053,6 @@
                 const c = data.customers.find(x => x.id === app.currentCustomer);
                 
                 let isNew = false;
-                
                 if(txId) {
                     const idx = c.transactions.findIndex(t => t.id === txId);
                     if(idx > -1) {
@@ -1044,17 +1068,11 @@
                     c.transactions.push(newTx);
                     if(type === 'due') c.balance += amt; else c.balance -= amt;
                 }
-                
                 db.save(); 
                 app.closeModal('modal-trans'); 
                 this.viewCustomer(true);
-
-                // SHOW RECEIPT IF NEW TRANSACTION
-                if (isNew) {
-                    this.showReceipt(c, amt, type, note, date);
-                }
+                if (isNew) this.showReceipt(c, amt, type, note, date);
             },
-            // === NEW: Show Receipt Popup ===
             showReceipt: function(customer, amount, type, note, date) {
                 const shop = db.active().name;
                 document.getElementById('rec-shop-name').innerText = shop;
@@ -1063,18 +1081,13 @@
                 document.getElementById('rec-amount').innerText = "৳ " + amount;
                 document.getElementById('rec-amount').style.color = type === 'payment' ? 'green' : 'red';
                 document.getElementById('rec-note').innerText = note || (type === 'payment' ? 'ক্যাশ জমা' : 'বাকি');
-                
                 const tBadge = document.getElementById('rec-type');
                 if(type==='payment') { tBadge.innerText="জমা (Received)"; tBadge.style.background="#dcedc8"; tBadge.style.color="green"; }
                 else { tBadge.innerText="বাকি (Due)"; tBadge.style.background="#ffcdd2"; tBadge.style.color="red"; }
-
                 const balTxt = customer.balance > 0 ? `৳ ${customer.balance} (পাবো)` : (customer.balance < 0 ? `৳ ${Math.abs(customer.balance)} (দেবো)` : `৳ 0`);
                 document.getElementById('rec-balance').innerText = balTxt;
-
                 app.openModal('modal-receipt');
             },
-            
-            // === HELPER: Get Message String ===
             getReceiptMsg: function() {
                 const shop = document.getElementById('rec-shop-name').innerText;
                 const date = document.getElementById('rec-date').innerText;
@@ -1083,29 +1096,17 @@
                 const type = document.getElementById('rec-type').innerText;
                 const note = document.getElementById('rec-note').innerText;
                 const balance = document.getElementById('rec-balance').innerText;
-
                 return `*${shop}*\n---------------------\n${date}\nকাস্টমার: ${cName}\nলেনদেন: ${type}\nপরিমাণ: ${amount}\nবিবরণ: ${note}\n---------------------\n${balance}\n---------------------\nধন্যবাদ।`;
             },
-
-            // === OPTION 1: NATIVE SHARE (Other Apps) ===
             shareReceiptNative: function() {
                 const msg = this.getReceiptMsg();
-                if (navigator.share) {
-                    navigator.share({
-                        title: 'লেনদেন রিসিট',
-                        text: msg
-                    }).catch(console.error);
-                } else {
-                    navigator.clipboard.writeText(msg).then(() => alert("টেক্সট কপি হয়েছে! আপনি এখন মেসেঞ্জার বা অন্য অ্যাপে পেস্ট করতে পারেন।"));
-                }
+                if (navigator.share) { navigator.share({ title: 'লেনদেন রিসিট', text: msg }).catch(console.error); } 
+                else { navigator.clipboard.writeText(msg).then(() => alert("টেক্সট কপি হয়েছে!")); }
             },
-
-            // === OPTION 2: DIRECT WHATSAPP ===
             shareReceiptWhatsApp: function() {
                 const msg = this.getReceiptMsg();
                 window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
             },
-
             editTx: function(id) {
                 const data = db.active().data;
                 const c = data.customers.find(x => x.id === app.currentCustomer);
@@ -1137,9 +1138,7 @@
             openSellModal: function(cid) {
                 const data = db.active().data;
                 if(data.products.length === 0) return alert("আগে পণ্য যুক্ত করুন");
-                
                 document.getElementById('sell-note').value = '';
-
                 const cSelect = document.getElementById('sell-c-select');
                 cSelect.innerHTML = `<option value="">-- ক্যাশ কাস্টমার --</option>` + data.customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
                 if(cid) cSelect.value = cid;
@@ -1165,20 +1164,12 @@
                 const note = document.getElementById('sell-note').value;
 
                 if(!pid || !qty) return alert("পণ্য এবং পরিমাণ নির্বাচন করুন");
-
                 const product = data.products.find(p => p.id === pid);
                 if(product.stock < qty) return alert("স্টক অপর্যাপ্ত!");
 
                 product.stock -= qty;
-
                 data.inventoryLog.push({ 
-                    id: 'log_' + Date.now(), 
-                    productId: pid, 
-                    type: 'out', 
-                    qty: qty, 
-                    rate: rate,
-                    note: note,
-                    date: new Date().toISOString().split('T')[0] 
+                    id: 'log_' + Date.now(), productId: pid, type: 'out', qty: qty, rate: rate, note: note, date: new Date().toISOString().split('T')[0] 
                 });
 
                 if(cid) {
@@ -1187,26 +1178,16 @@
                         if(!cust.transactions) cust.transactions = [];
                         const total = qty * rate;
                         cust.transactions.push({ 
-                            id: 'tx_' + Date.now(), 
-                            type: 'due', 
-                            amount: total, 
-                            note: `পণ্য: ${product.name} x ${qty} ${note ? '('+note+')' : ''}`, 
-                            date: new Date().toISOString().split('T')[0] 
+                            id: 'tx_' + Date.now(), type: 'due', amount: total, note: `পণ্য: ${product.name} x ${qty} ${note ? '('+note+')' : ''}`, date: new Date().toISOString().split('T')[0] 
                         });
                         cust.balance += total;
                     }
                 }
-
                 db.save(); 
                 app.closeModal('modal-sell');
-
                 inventory.renderList(); 
-                if(document.getElementById('view-product-detail').classList.contains('active')) {
-                    if(app.currentProduct === pid) inventory.viewDetail();
-                }
-                if(app.currentCustomer && cid === app.currentCustomer && document.getElementById('view-customer-detail').classList.contains('active')) {
-                    this.viewCustomer(true);
-                }
+                if(document.getElementById('view-product-detail').classList.contains('active')) { if(app.currentProduct === pid) inventory.viewDetail(); }
+                if(app.currentCustomer && cid === app.currentCustomer && document.getElementById('view-customer-detail').classList.contains('active')) { this.viewCustomer(true); }
             }
         };
 
@@ -1242,376 +1223,245 @@
         };
 
         const inventory = {
-            currentLogId: null,
-            isEditingLog: false,
-            logTypeEditing: null, // 'in' or 'out'
-
+            currentLogId: null, isEditingLog: false, logTypeEditing: null,
             renderList: function() {
                 const data = db.active().data;
                 const q = document.getElementById('search-product').value.toLowerCase();
                 const list = data.products.filter(p => p.name.toLowerCase().includes(q));
                 
-                let totalStockVal = 0;
-                let totalSold = 0;
-
+                let totalStockVal = 0, totalSold = 0, totalProfit = 0;
                 list.forEach(p => {
                     totalStockVal += (p.stock * p.buy);
                     const logs = data.inventoryLog.filter(l => l.productId === p.id && l.type === 'out');
-                    totalSold += logs.reduce((sum, l) => sum + (l.qty * l.rate), 0);
+                    const revenue = logs.reduce((sum, l) => sum + (l.qty * l.rate), 0);
+                    const soldQty = logs.reduce((sum, l) => sum + l.qty, 0);
+                    totalSold += revenue;
+                    totalProfit += (revenue - (soldQty * p.buy));
                 });
-
                 document.getElementById('inv-stock-val').innerText = totalStockVal.toLocaleString();
                 document.getElementById('inv-total-sales').innerText = totalSold.toLocaleString();
-                document.getElementById('inv-est-profit').innerText = "---"; 
+                document.getElementById('inv-est-profit').innerText = totalProfit.toLocaleString(); 
                 document.getElementById('inv-item-count').innerText = list.length;
-
                 document.getElementById('product-list').innerHTML = list.map(p => `
                     <div class="list-item" onclick="app.currentProduct='${p.id}'; inventory.viewDetail()">
                         <div class="list-row">
-                            <div>
-                                <b>${p.name}</b>
-                                <br><small class="text-muted">Buy: ${p.buy} | Sell: ${p.sell}</small>
-                            </div>
-                            <div style="text-align:right;">
-                                <span class="badge" style="background:var(--secondary); color:white; font-size:13px;">${p.stock} ${p.unit}</span>
-                            </div>
+                            <div><b>${p.name}</b><br><small class="text-muted">Buy: ${p.buy} | Sell: ${p.sell}</small></div>
+                            <div style="text-align:right;"><span class="badge" style="background:var(--secondary); color:white; font-size:13px;">${p.stock} ${p.unit}</span></div>
                         </div>
                     </div>
                 `).join('');
             },
-
             save: function() {
                 const data = db.active().data;
                 const id = document.getElementById('p-id').value;
                 const name = document.getElementById('p-name').value;
                 if(!name) return alert("নাম আবশ্যক");
-
                 const product = {
-                    id: id || 'p_' + Date.now(),
-                    name: name,
+                    id: id || 'p_' + Date.now(), name: name,
                     buy: parseFloat(document.getElementById('p-buy').value) || 0,
                     sell: parseFloat(document.getElementById('p-sell').value) || 0,
                     stock: parseFloat(document.getElementById('p-stock').value) || 0,
                     unit: document.getElementById('p-unit').value || 'Pcs'
                 };
-
                 if(id) {
                     const idx = data.products.findIndex(p => p.id === id);
                     const oldStock = data.products[idx].stock; 
                     const manualStock = document.getElementById('p-stock').value;
-                    if(manualStock !== "" && !isNaN(manualStock)) product.stock = parseFloat(manualStock);
-                    else product.stock = oldStock;
-
+                    if(manualStock !== "" && !isNaN(manualStock)) product.stock = parseFloat(manualStock); else product.stock = oldStock;
                     data.products[idx] = product;
-                    
-                    if(app.currentProduct === id) {
-                        db.save();
-                        app.closeModal('modal-product');
-                        this.viewDetail(); 
-                        return;
-                    }
+                    if(app.currentProduct === id) { db.save(); app.closeModal('modal-product'); this.viewDetail(); return; }
                 } else {
                     product.stock = parseFloat(document.getElementById('p-stock').value) || 0;
                     data.products.push(product);
                     if(product.stock > 0) {
-                        data.inventoryLog.push({
-                            id: 'l_'+Date.now(), productId: product.id, type: 'in', qty: product.stock, date: new Date().toISOString().split('T')[0]
-                        });
+                        data.inventoryLog.push({ id: 'l_'+Date.now(), productId: product.id, type: 'in', qty: product.stock, date: new Date().toISOString().split('T')[0], rate: product.buy });
                     }
                 }
-                
-                db.save();
-                app.closeModal('modal-product');
-                this.renderList();
+                db.save(); app.closeModal('modal-product'); this.renderList();
             },
-
             viewDetail: function() {
                 const data = db.active().data;
                 const p = data.products.find(x => x.id === app.currentProduct);
                 if(!p) return;
-
                 document.querySelectorAll('.container').forEach(e => e.classList.remove('active'));
                 document.getElementById('view-product-detail').classList.add('active');
                 document.getElementById('back-btn').style.display = 'block';
                 document.getElementById('main-navbar').style.display = 'none';
-
                 const logs = data.inventoryLog.filter(l => l.productId === p.id);
                 const soldLogs = logs.filter(l => l.type === 'out');
-                
                 const soldQty = soldLogs.reduce((sum, l) => sum + l.qty, 0);
                 const income = soldLogs.reduce((sum, l) => sum + (l.qty * l.rate), 0);
-
                 document.getElementById('pd-name').innerText = p.name;
                 document.getElementById('pd-stock').innerText = p.stock + " " + p.unit;
                 document.getElementById('pd-sold').innerText = soldQty;
                 document.getElementById('pd-income').innerText = "৳ " + income.toLocaleString();
                 document.getElementById('pd-buy').innerText = p.buy;
                 document.getElementById('pd-sell').innerText = p.sell;
+                
+                // --- FIXED VIEW DETAIL LOGIC HERE ---
+                document.getElementById('product-history-list').innerHTML = logs.slice().reverse().map(l => {
+                    const qty = parseFloat(l.qty) || 0;
+                    const rate = parseFloat(l.rate) || 0;
+                    const total = qty * rate;
 
-                document.getElementById('product-history-list').innerHTML = logs.slice().reverse().map(l => `
+                    return `
                     <div class="list-item" onclick="inventory.openLogOptions('${l.id}')" style="cursor:pointer; border-left: 4px solid ${l.type==='in'?'#2ecc71':'#e74c3c'}; padding-left:10px;">
                         <div class="list-row">
                             <div>
-                                <b>${l.type === 'in' ? 'স্টক ইন' : 'বিক্রয়'}</b>
-                                <br><small>${l.date}</small>
-                                ${l.note ? `<br><small class="text-muted" style="font-style:italic;">"${l.note}"</small>` : ''}
+                                <b>${l.type === 'in' ? 'স্টক ইন' : 'বিক্রয়'}</b><br>
+                                <small>${l.date}</small>
+                                ${l.note ? `<br><small class="text-muted">"${l.note}"</small>` : ''}
                             </div>
                             <div style="text-align:right;">
-                                <b>${l.qty}</b>
-                                ${l.type==='out' ? `<br><small>@ ${l.rate} tk</small>` : ''}
+                                <span style="font-size:15px; font-weight:bold; color:var(--text);">৳ ${total.toLocaleString()}</span><br>
+                                <small class="text-muted">${qty} x ${rate}</small>
                             </div>
                         </div>
                     </div>
-                `).join('');
+                    `;
+                }).join('');
             },
-
             openLogOptions: function(logId) {
                 this.currentLogId = logId;
                 const data = db.active().data;
                 const log = data.inventoryLog.find(l => l.id === logId);
                 const p = data.products.find(x => x.id === app.currentProduct);
-                
                 if(!log) return;
-
                 document.getElementById('opt-log-type').innerText = log.type === 'in' ? 'স্টক ইন (Stock In)' : 'বিক্রয় (Sale)';
                 document.getElementById('opt-log-type').style.color = log.type === 'in' ? 'green' : 'red';
                 document.getElementById('opt-log-date').innerText = log.date;
                 document.getElementById('opt-log-qty').innerText = log.qty;
                 document.getElementById('opt-log-unit').innerText = p.unit;
-                
                 app.openModal('modal-log-options');
             },
-
-            // === UPDATED: Edit Both In and Out ===
             editFromModal: function() {
                 const data = db.active().data;
                 const log = data.inventoryLog.find(l => l.id === this.currentLogId);
                 const p = data.products.find(x => x.id === app.currentProduct);
                 app.closeModal('modal-log-options');
-
                 this.isEditingLog = true;
                 this.logTypeEditing = log.type;
-
                 document.getElementById('sin-title').innerText = log.type === 'in' ? "এডিট: স্টক ইন" : "এডিট: বিক্রয়";
                 document.getElementById('sin-p-name').innerText = p.name;
                 document.getElementById('sin-qty').value = log.qty;
-                
-                if (log.type === 'in') {
-                    document.getElementById('sin-cost-label').innerText = "ক্রয় মূল্য";
-                    document.getElementById('sin-cost').value = p.buy; // Default to current buy price
-                } else {
-                    document.getElementById('sin-cost-label').innerText = "বিক্রয় দর (Rate)";
-                    document.getElementById('sin-cost').value = log.rate; 
-                }
-
+                document.getElementById('sin-note').value = log.note || ''; 
+                document.getElementById('sin-cost-label').innerText = log.type === 'in' ? "ক্রয় মূল্য" : "বিক্রয় দর";
+                document.getElementById('sin-cost').value = log.rate || (log.type === 'in' ? p.buy : p.sell); 
                 app.openModal('modal-stock-in');
             },
-
-            deleteFromModal: function() {
-                app.closeModal('modal-log-options');
-                this.deleteLog(this.currentLogId);
-            },
-            
+            deleteFromModal: function() { app.closeModal('modal-log-options'); this.deleteLog(this.currentLogId); },
             deleteLog: function(id) {
                 if(!confirm("এই রেকর্ড ডিলিট করলে স্টক অটোমেটিক অ্যাডজাস্ট হবে। নিশ্চিত?")) return;
-                
                 const data = db.active().data;
                 const p = data.products.find(x => x.id === app.currentProduct);
                 const log = data.inventoryLog.find(l => l.id === id);
-                
                 if(log) {
-                    if(log.type === 'in') p.stock -= log.qty;
-                    else p.stock += log.qty; // Sale deleted, stock returns
-                    
+                    if(log.type === 'in') p.stock -= log.qty; else p.stock += log.qty;
                     data.inventoryLog = data.inventoryLog.filter(l => l.id !== id);
-                    db.save();
-                    
-                    this.viewDetail(); 
-                    this.renderList();
+                    db.save(); this.viewDetail(); this.renderList();
                 }
             },
-
             stockAction: function(type) {
                 this.isEditingLog = false;
                 if(type === 'out') {
                     tally.openSellModal(null);
-                    setTimeout(() => {
-                        const sel = document.getElementById('sell-p-select');
-                        sel.value = app.currentProduct;
-                        tally.updateSellPrice();
-                    }, 100);
+                    setTimeout(() => { document.getElementById('sell-p-select').value = app.currentProduct; tally.updateSellPrice(); }, 100);
                 } else {
                     const data = db.active().data;
                     const p = data.products.find(x => x.id === app.currentProduct);
-                    
                     this.logTypeEditing = 'in';
                     document.getElementById('sin-title').innerText = "স্টক যোগ করুন";
                     document.getElementById('sin-p-name').innerText = p.name;
                     document.getElementById('sin-qty').value = '';
                     document.getElementById('sin-cost-label').innerText = "ক্রয় মূল্য";
                     document.getElementById('sin-cost').value = p.buy;
+                    document.getElementById('sin-note').value = ''; 
                     app.openModal('modal-stock-in');
                 }
             },
-
-            // === UPDATED: Confirm Stock (Handles Edits for Both In and Out) ===
             confirmStockIn: function() {
                 const qty = parseFloat(document.getElementById('sin-qty').value);
                 const costOrRate = parseFloat(document.getElementById('sin-cost').value);
-                
+                const note = document.getElementById('sin-note').value;
                 if(!qty) return alert("পরিমাণ উল্লেখ করুন");
-
                 const data = db.active().data;
                 const p = data.products.find(x => x.id === app.currentProduct);
-
                 if(this.isEditingLog && this.currentLogId) {
                     const log = data.inventoryLog.find(l => l.id === this.currentLogId);
                     if(log) {
-                        if (log.type === 'in') {
-                            // Revert old add, apply new
-                            p.stock -= log.qty;
-                            p.stock += qty;
-                            if(costOrRate) p.buy = costOrRate; // Update buy price
-                        } else {
-                            // Revert old sale (add back), apply new sale (subtract)
-                            p.stock += log.qty;
-                            p.stock -= qty;
-                            log.rate = costOrRate; // Update sell rate
-                        }
-                        log.qty = qty;
+                        if (log.type === 'in') { p.stock -= log.qty; p.stock += qty; if(costOrRate) p.buy = costOrRate; } 
+                        else { p.stock += log.qty; p.stock -= qty; }
+                        log.rate = costOrRate; log.qty = qty; log.note = note;
                     }
                 } else {
-                    // New Stock In
                     p.stock += qty;
-                    data.inventoryLog.push({
-                        id: 'l_'+Date.now(), 
-                        productId: p.id, 
-                        type: 'in', 
-                        qty: qty, 
-                        date: new Date().toISOString().split('T')[0]
-                    });
+                    data.inventoryLog.push({ id: 'l_'+Date.now(), productId: p.id, type: 'in', qty: qty, note: note, rate: costOrRate, date: new Date().toISOString().split('T')[0] });
                     if(costOrRate) p.buy = costOrRate;
                 }
-
-                db.save();
-                app.closeModal('modal-stock-in');
-                this.isEditingLog = false;
-                this.logTypeEditing = null;
-                
-                this.viewDetail();
-                this.renderList();
+                db.save(); app.closeModal('modal-stock-in'); this.isEditingLog = false; this.logTypeEditing = null;
+                this.viewDetail(); this.renderList();
             },
-            
-            openModal: function() {
-                ['p-id','p-name','p-buy','p-sell','p-stock','p-unit'].forEach(i => document.getElementById(i).value = '');
-                app.openModal('modal-product');
-            },
-
+            openModal: function() { ['p-id','p-name','p-buy','p-sell','p-stock','p-unit'].forEach(i => document.getElementById(i).value = ''); app.openModal('modal-product'); },
             editCurrent: function() {
                 const data = db.active().data;
                 const p = data.products.find(x => x.id === app.currentProduct);
-                document.getElementById('p-id').value = p.id;
-                document.getElementById('p-name').value = p.name;
-                document.getElementById('p-buy').value = p.buy;
-                document.getElementById('p-sell').value = p.sell;
-                document.getElementById('p-stock').value = p.stock;
-                document.getElementById('p-unit').value = p.unit;
+                document.getElementById('p-id').value = p.id; document.getElementById('p-name').value = p.name;
+                document.getElementById('p-buy').value = p.buy; document.getElementById('p-sell').value = p.sell;
+                document.getElementById('p-stock').value = p.stock; document.getElementById('p-unit').value = p.unit;
                 app.openModal('modal-product');
             },
-
             deleteCurrent: function() {
                 if(!confirm("পণ্যটি ডিলিট করবেন?")) return;
                 const data = db.active().data;
                 data.products = data.products.filter(p => p.id !== app.currentProduct);
-                db.save();
-                app.nav('inventory');
+                db.save(); app.nav('inventory');
             }
         };
 
-        // ========================
-        // DATA MANAGER (FIXED BACKUP BUTTON)
-        // ========================
         const dataManager = {
             exportJSON: function() {
                 try {
-                    // ১. পুরো ডাটাবেস (সব অ্যাকাউন্ট ও ইনভেন্টরি) স্ট্রিং এ রূপান্তর
                     const fullData = JSON.stringify(db.state);
-                    
-                    // ২. এনকোডেড ইউআরএল তৈরি (Data URI Scheme)
-                    // এটি Java Code এর 'else' ব্লকে ধরা পড়বে
                     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(fullData);
-                    
-                    // ৩. নতুন পদ্ধতি: একটি অদৃশ্য লিঙ্ক তৈরি করে ক্লিক করা
-                    // এটি WebView এর DownloadListener কে নিশ্চিতভাবে ট্রিগার করে
                     const downloadAnchorNode = document.createElement('a');
                     downloadAnchorNode.setAttribute("href", dataStr);
                     downloadAnchorNode.setAttribute("download", "backup.json");
-                    document.body.appendChild(downloadAnchorNode); // বডিতে যুক্ত করা
-                    downloadAnchorNode.click(); // ক্লিক করা
-                    downloadAnchorNode.remove(); // মুছে ফেলা
-                    
-                } catch (e) {
-                    alert("ব্যাকআপ তৈরি করতে সমস্যা হয়েছে: " + e.message);
-                    console.error(e);
-                }
+                    document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove();
+                } catch (e) { alert("ব্যাকআপ তৈরি করতে সমস্যা হয়েছে: " + e.message); }
             },
-            
             importJSON: function(input) {
                 if (!input.files || !input.files[0]) return;
-                
                 const fr = new FileReader();
                 fr.onload = e => {
                     try {
                         const importedData = JSON.parse(e.target.result);
-                        
-                        // ব্যাকআপ ফাইলের ধরন চেক করা
                         let newDataState = null;
-
-                        // টাইপ ১: মাল্টি-অ্যাকাউন্ট (সঠিক ফরম্যাট)
-                        if(importedData.accounts && Array.isArray(importedData.accounts)) {
-                            newDataState = importedData;
-                        } 
-                        // টাইপ ২: ওল্ড সিঙ্গেল অ্যাকাউন্ট ফরম্যাট
+                        if(importedData.accounts && Array.isArray(importedData.accounts)) { newDataState = importedData; } 
                         else if(importedData.customers) {
                             newDataState = { 
                                 accounts: [{
-                                    id: 'acc_restored_' + Date.now(), 
-                                    name: 'Restored Shop', 
-                                    data: {
-                                        customers: importedData.customers || [],
-                                        products: importedData.products || [], 
-                                        inventoryLog: importedData.inventoryLog || []
-                                    }
-                                }], 
-                                activeId: null 
+                                    id: 'acc_restored_' + Date.now(), name: 'Restored Shop', 
+                                    data: { customers: importedData.customers || [], products: importedData.products || [], inventoryLog: importedData.inventoryLog || [] }
+                                }], activeId: null 
                             };
                             newDataState.activeId = newDataState.accounts[0].id;
                         }
-
                         if(newDataState) {
                             if(confirm("বর্তমান ডাটা মুছে ব্যাকআপ ফাইলটি রিস্টোর হবে। আপনি কি নিশ্চিত?")) {
                                 db.state = newDataState;
-                                // ডাটা স্যানিটাইজেশন (ফাঁকা অ্যারে ঠিক করা)
                                 db.state.accounts.forEach(acc => {
                                     if(!acc.data) acc.data = {};
                                     if(!acc.data.customers) acc.data.customers = [];
                                     if(!acc.data.products) acc.data.products = [];
                                     if(!acc.data.inventoryLog) acc.data.inventoryLog = [];
                                 });
-
-                                db.saveLocal(); 
-                                alert("রিস্টোর সফল হয়েছে!"); 
-                                location.reload(); 
+                                db.saveLocal(); alert("রিস্টোর সফল হয়েছে!"); location.reload(); 
                             }
-                        } else {
-                            alert("ভুল ফাইল ফরম্যাট!");
-                        }
-                    } catch(e) { 
-                        alert("ফাইলটি পড়া যাচ্ছে না।"); 
-                    }
+                        } else { alert("ভুল ফাইল ফরম্যাট!"); }
+                    } catch(e) { alert("ফাইলটি পড়া যাচ্ছে না।"); }
                 };
                 fr.readAsText(input.files[0]);
-                input.value = ''; // রিসেট
+                input.value = '';
             }
         };
 
